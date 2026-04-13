@@ -68,32 +68,47 @@ def check_tickets():
             return
 
         # 有票條件
-        has_seats = soup.find("input", {"type": "radio"}) or soup.find("select")
-        if not has_seats:
-            result = "無票"
-            print(f"[{now}] {result}")
-            log.append({"time": now, "result": result})
-            save_log(log)
-            return
+     target_found = {}
+select_elem = soup.find("select")
+if select_elem:
+    options = select_elem.find_all("option")
+    for opt in options:
+        opt_text = opt.get_text()
+        if "May 20" in opt_text:
+            target_found["5月20日"] = opt.get("value", "")
+        if "May 22" in opt_text:
+            target_found["5月22日"] = opt.get("value", "")
 
-        # 確認目標日期
-        found_dates = [d for d in TARGET_DATES if d in text]
-        if not found_dates:
-            result = "有票但非目標場次"
-            print(f"[{now}] {result}")
-            log.append({"time": now, "result": result})
-            save_log(log)
-            return
+if not target_found:
+    result = "無票（找不到目標場次選項）"
+    print(f"[{now}] {result}")
+    log.append({"time": now, "result": result})
+    save_log(log)
+    return
 
-        matched = ""
-        if any("20" in d for d in found_dates):
-            matched += "5月20日 "
-        if any("22" in d for d in found_dates):
-            matched += "5月22日"
-        result = f"有票！{matched.strip()}"
-        log.append({"time": now, "result": result})
-        save_log(log)
-        send_alert(matched.strip())
+# 找有沒有 ○ 或 △（Available 或 Only few left）
+# × 是 sold out，radio button 會是 disabled
+available_radios = soup.find_all("input", {"type": "radio"})
+has_available = any(
+    not r.get("disabled") and not r.get("class", [""])[0] == "soldout"
+    for r in available_radios
+)
+
+# 也檢查頁面文字有沒有 Available 或 Only few left
+has_available_text = "Available" in text or "Only few left" in text
+
+if not has_available and not has_available_text:
+    result = "無票（全部 Sold out）"
+    print(f"[{now}] {result}")
+    log.append({"time": now, "result": result})
+    save_log(log)
+    return
+
+matched = " ".join(target_found.keys())
+result = f"有票！{matched}"
+log.append({"time": now, "result": result})
+save_log(log)
+send_alert(matched)
 
     except Exception as e:
         result = f"錯誤：{e}"

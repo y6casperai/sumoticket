@@ -13,7 +13,6 @@ from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 
 URL = "https://sell.pia.jp/inbound/selectTicket.php?eventCd=2601912&rlsCd=003&langCd=eng"
-TARGET_DATES = ["May 20", "May 22", "5/20", "5/22"]
 LOG_FILE = "check_log.json"
 
 def get_driver():
@@ -44,13 +43,14 @@ def check_tickets():
     try:
         driver = get_driver()
         driver.get(URL)
-        time.sleep(10)  # 等待 JS 渲染
+        time.sleep(10)
         html = driver.page_source
         driver.quit()
 
         soup = BeautifulSoup(html, "html.parser")
         text = soup.get_text()
 
+        # 確認頁面載入
         if "Kokugikan" not in text:
             result = "頁面載入異常"
             print(f"[{now}] {result}")
@@ -67,48 +67,43 @@ def check_tickets():
             save_log(log)
             return
 
-        # 有票條件
-     target_found = {}
-select_elem = soup.find("select")
-if select_elem:
-    options = select_elem.find_all("option")
-    for opt in options:
-        opt_text = opt.get_text()
-        if "May 20" in opt_text:
-            target_found["5月20日"] = opt.get("value", "")
-        if "May 22" in opt_text:
-            target_found["5月22日"] = opt.get("value", "")
+        # 找目標日期的 dropdown 選項
+        target_found = {}
+        select_elem = soup.find("select")
+        if select_elem:
+            for opt in select_elem.find_all("option"):
+                opt_text = opt.get_text()
+                if "May 20" in opt_text:
+                    target_found["5月20日"] = opt.get("value", "")
+                if "May 22" in opt_text:
+                    target_found["5月22日"] = opt.get("value", "")
 
-if not target_found:
-    result = "無票（找不到目標場次選項）"
-    print(f"[{now}] {result}")
-    log.append({"time": now, "result": result})
-    save_log(log)
-    return
+        if not target_found:
+            result = "無票（找不到目標場次）"
+            print(f"[{now}] {result}")
+            log.append({"time": now, "result": result})
+            save_log(log)
+            return
 
-# 找有沒有 ○ 或 △（Available 或 Only few left）
-# × 是 sold out，radio button 會是 disabled
-available_radios = soup.find_all("input", {"type": "radio"})
-has_available = any(
-    not r.get("disabled") and not r.get("class", [""])[0] == "soldout"
-    for r in available_radios
-)
+        # 確認有 ○ 或 △（Available 或 Only few left）
+        available_radios = soup.find_all("input", {"type": "radio"})
+        has_available = any(not r.get("disabled") for r in available_radios)
+        has_available_text = "Available" in text or "Only few left" in text
 
-# 也檢查頁面文字有沒有 Available 或 Only few left
-has_available_text = "Available" in text or "Only few left" in text
+        if not has_available and not has_available_text:
+            result = "無票（全部 Sold out）"
+            print(f"[{now}] {result}")
+            log.append({"time": now, "result": result})
+            save_log(log)
+            return
 
-if not has_available and not has_available_text:
-    result = "無票（全部 Sold out）"
-    print(f"[{now}] {result}")
-    log.append({"time": now, "result": result})
-    save_log(log)
-    return
-
-matched = " ".join(target_found.keys())
-result = f"有票！{matched}"
-log.append({"time": now, "result": result})
-save_log(log)
-send_alert(matched)
+        # 有票！
+        matched = " ".join(target_found.keys())
+        result = f"有票！{matched}"
+        print(f"[{now}] {result}")
+        log.append({"time": now, "result": result})
+        save_log(log)
+        send_alert(matched)
 
     except Exception as e:
         result = f"錯誤：{e}"
@@ -137,7 +132,6 @@ def send_daily_summary():
     found = [r for r in log if "有票" in r["result"]]
     no_ticket = [r for r in log if r["result"] == "無票"]
     errors = [r for r in log if "錯誤" in r["result"] or "異常" in r["result"]]
-
     detail = "\n".join([f"{r['time']} - {r['result']}" for r in log]) or "無紀錄"
 
     subject = f"📊 搶票監控每日報告 {datetime.now().strftime('%Y-%m-%d')}"

@@ -41,6 +41,7 @@ jobs:
             python ticket_monitor.py summary
           else
             python ticket_monitor.py check
+          fi
 
       - name: Save log to repository
         run: |

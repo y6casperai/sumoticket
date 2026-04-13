@@ -1,0 +1,26 @@
+name: Ticket Monitor
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'  # 每2小時執行一次
+  workflow_dispatch:  # 允許手動執行
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run ticket monitor
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
+        run: python ticket_monitor.py

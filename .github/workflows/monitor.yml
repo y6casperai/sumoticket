@@ -9,6 +9,9 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+permissions:
+  contents: write
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -38,4 +41,11 @@ jobs:
             python ticket_monitor.py summary
           else
             python ticket_monitor.py check
-          fi
+
+      - name: Save log to repository
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add check_log.json
+          git diff --staged --quiet || git commit -m "update log $(date -u '+%Y-%m-%d %H:%M')"
+          git push

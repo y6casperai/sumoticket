@@ -1,20 +1,30 @@
-import requests
-from bs4 import BeautifulSoup
 import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime
 import os
 import sys
 import json
+import time
+
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from bs4 import BeautifulSoup
 
 URL = "https://sell.pia.jp/inbound/selectTicket.php?eventCd=2601912&rlsCd=003&langCd=eng"
 TARGET_DATES = ["May 20", "May 22", "5/20", "5/22"]
 LOG_FILE = "check_log.json"
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
-    "Referer": "https://sell.pia.jp"
-}
+def get_driver():
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36")
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    return driver
 
 def load_log():
     if os.path.exists(LOG_FILE):
@@ -32,8 +42,13 @@ def check_tickets():
     result = "無票"
 
     try:
-        res = requests.get(URL, headers=HEADERS, timeout=15)
-        soup = BeautifulSoup(res.text, "html.parser")
+        driver = get_driver()
+        driver.get(URL)
+        time.sleep(10)  # 等待 JS 渲染
+        html = driver.page_source
+        driver.quit()
+
+        soup = BeautifulSoup(html, "html.parser")
         text = soup.get_text()
 
         if "Kokugikan" not in text:
@@ -43,16 +58,16 @@ def check_tickets():
             save_log(log)
             return
 
-        goes_on_sale = "Goes on sale" in text
-        sold_out = any(word in text for word in ["SOLD OUT", "売り切れ", "完売"])
-
-        if goes_on_sale or sold_out:
+        # 無票條件
+        no_ticket_keywords = ["Goes on sale", "SOLD OUT", "売り切れ", "完売"]
+        if any(kw in text for kw in no_ticket_keywords):
             result = "無票"
             print(f"[{now}] {result}")
             log.append({"time": now, "result": result})
             save_log(log)
             return
 
+        # 有票條件
         has_seats = soup.find("input", {"type": "radio"}) or soup.find("select")
         if not has_seats:
             result = "無票"
@@ -61,6 +76,7 @@ def check_tickets():
             save_log(log)
             return
 
+        # 確認目標日期
         found_dates = [d for d in TARGET_DATES if d in text]
         if not found_dates:
             result = "有票但非目標場次"
@@ -125,8 +141,6 @@ def send_daily_summary():
 """
     send_email(subject, body)
     print(f"[{now}] 📊 每日報告已發送")
-
-    # 發完清空 log
     save_log([])
 
 def send_email(subject, body):

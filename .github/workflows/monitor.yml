@@ -2,8 +2,8 @@ name: Ticket Monitor
 
 on:
   schedule:
-    - cron: '0 * * * *'      # 每1小時檢查一次
-    - cron: '0 2 * * *'      # 每天早上10點台灣時間（UTC+8，所以UTC是02:00）發報告
+    - cron: '0 * * * *'
+    - cron: '0 2 * * *'
   workflow_dispatch:
 
 jobs:
@@ -16,6 +16,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - name: Install Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
 
       - name: Install dependencies
         run: pip install -r requirements.txt

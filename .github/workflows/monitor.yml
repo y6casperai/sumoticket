@@ -2,25 +2,32 @@ name: Ticket Monitor
 
 on:
   schedule:
-    - cron: '0 */2 * * *'  # 每2小時執行一次
-  workflow_dispatch:  # 允許手動執行
+    - cron: '0 * * * *'      # 每1小時檢查一次
+    - cron: '0 2 * * *'      # 每天早上10點台灣時間（UTC+8，所以UTC是02:00）發報告
+  workflow_dispatch:
 
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run ticket monitor
+      - name: Run check or summary
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
-        run: python ticket_monitor.py
+        run: |
+          HOUR=$(date -u +%H)
+          if [ "$HOUR" = "02" ]; then
+            python ticket_monitor.py summary
+          else
+            python ticket_monitor.py check
+          fi

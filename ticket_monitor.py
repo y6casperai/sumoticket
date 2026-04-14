@@ -1,3 +1,4 @@
+from zoneinfo import ZoneInfo
 import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime
@@ -113,7 +114,7 @@ def check_tickets():
         sys.exit(1)
 
 def send_alert(dates):
-    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    now = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M")
     subject = f"🎫 有票了！{dates} 場次有票！"
     body = f"""有票了！請立刻前往購買！
 
